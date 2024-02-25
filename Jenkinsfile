@@ -3,62 +3,36 @@ pipeline {
     agent any 
     
     environment {
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        // Define your image name and tag using environment variables
+        IMAGE_NAME = 'huiarup/cicd-e2e'
+        DOCKER_CREDENTIALS_ID = 'DockerID' // Ensure this matches the ID of your Docker credentials in Jenkins
     }
     
     stages {
         
-        stage('Checkout'){
-           steps {
-                git credentialsId: 'f87a34a8-0e09-45e7-b9cf-6dc68feac670', 
-                url: 'https://github.com/iam-veeramalla/cicd-end-to-end',
-                branch: 'main'
-           }
+        stage('Checkout') {
+            steps {
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Aruphui/TODO.git']], branches: [[name: '*/main']]]
+            }
         }
 
-        stage('Build Docker'){
-            steps{
-                script{
-                    sh '''
-                    echo 'Buid Docker Image'
-                    docker build -t abhishekf5/cicd-e2e:${BUILD_NUMBER} .
-                    '''
+        stage('Build Docker') {
+            steps {
+                script {
+                    sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
                 }
             }
         }
 
-        stage('Push the artifacts'){
-           steps{
-                script{
-                    sh '''
-                    echo 'Push to Repo'
-                    docker push abhishekf5/cicd-e2e:${BUILD_NUMBER}
-                    '''
-                }
-            }
-        }
-        
-        stage('Checkout K8S manifest SCM'){
+        stage('Push the artifacts') {
             steps {
-                git credentialsId: 'f87a34a8-0e09-45e7-b9cf-6dc68feac670', 
-                url: 'https://github.com/iam-veeramalla/cicd-demo-manifests-repo.git',
-                branch: 'main'
-            }
-        }
-        
-        stage('Update K8S manifest & push to Repo'){
-            steps {
-                script{
-                    withCredentials([usernamePassword(credentialsId: 'f87a34a8-0e09-45e7-b9cf-6dc68feac670', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
-                        sh '''
-                        cat deploy.yaml
-                        sed -i '' "s/32/${BUILD_NUMBER}/g" deploy.yaml
-                        cat deploy.yaml
-                        git add deploy.yaml
-                        git commit -m 'Updated the deploy yaml | Jenkins Pipeline'
-                        git remote -v
-                        git push https://github.com/iam-veeramalla/cicd-demo-manifests-repo.git HEAD:main
-                        '''                        
+                script {
+                    // Login to Docker registry before pushing
+                    sh "echo 'Push to Repo'"
+                    docker.withRegistry('', DOCKER_CREDENTIALS_ID) {
+                        // Define the docker image variable based on the built image
+                        def dockerImage = docker.image("${IMAGE_NAME}:${BUILD_NUMBER}")
+                        dockerImage.push()
                     }
                 }
             }
